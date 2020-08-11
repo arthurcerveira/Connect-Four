@@ -1,11 +1,9 @@
 module Main where
 
+import System.IO 
+import Control.Monad  -- To use 'when'
 -- cabal install ansi-terminal
-import System.IO
-import System.Console.ANSI
-
--- Board displayed to the user
-type GameBoard = [[Char]]
+import System.Console.ANSI  -- Add color to output
 
 -- Control board
 -- 0: Empty
@@ -19,27 +17,27 @@ playerOne = 1
 playerTwo :: Int
 playerTwo = 2
 
-gameBoard :: GameBoard
-gameBoard = [['-','-','-','-','-','-','-'],
-             ['-','-','-','-','-','-','-'],
-             ['-','-','-','-','-','-','-'],
-             ['-','-','-','-','-','-','-'],
-             ['-','-','-','-','-','-','-'],
-             ['-','-','-','-','-','-','-']]
-
 controlBoard :: ControlBoard
-controlBoard = [[0, 0, 1, 1, 2, 1, 0],
-                [0, 0, 1, 1, 0, 0, 0],
-                [0, 0, 2, 2, 1, 2, 0],
-                [1, 0, 0, 0, 2, 2, 0],
+controlBoard = [[0, 0, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0]] 
+                [0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0]]
+
+columnsMap :: [(String, Int)]
+columnsMap = [("a", 0), ("b", 1), ("c", 2), 
+              ("d", 3), ("e", 4), ("f", 5),
+              ("g", 6)]
 
 rowsArray :: [Int]
 rowsArray = [0, 1, 2, 3, 4, 5]
 
 columnsArray :: [Int]
 columnsArray = [0, 1, 2, 3, 4, 5, 6]
+
+inverseRowsArray :: [Int]
+inverseRowsArray = [5, 4, 3, 2, 1, 0]
 
 -- Function to manage the board
 getArray :: Int -> [t] -> t
@@ -122,20 +120,91 @@ isDraw (row:rows) = isDrawRecur row && isDraw rows
         | column == 0 = False
         | otherwise = True && isDrawRecur columns
 
+-- Print board
+printBoard :: ControlBoard -> [Int] -> [Int] -> IO ()
+printBoard board [] columns = putStr ""  
+printBoard board (row:rows) [] = do 
+  putStr "\n"  
+  printBoard board rows columnsArray
+printBoard board (row:rows) (column:columns) = do
+  let position = getPosition row column board
+
+  when (position == playerOne) $ setSGR [SetColor Foreground Vivid Red]
+  when (position == playerTwo) $ setSGR [SetColor Foreground Vivid Blue]
+
+  putStr ("O ")
+  setSGR [Reset]
+
+  printBoard board (row:rows) columns
+
+printHeader :: IO ()
+printHeader = do
+  setSGR [SetConsoleIntensity BoldIntensity]
+  putStr "\na b c d e f g\n"
+  setSGR [Reset]
+
+printPlayer :: Int -> IO ()
+printPlayer player = do
+  putStr "\nVez do "
+
+  when (player == playerOne) $ setSGR [SetColor Foreground Vivid Red]
+  when (player == playerTwo) $ setSGR [SetColor Foreground Vivid Blue]
+
+  putStr ("Jogador " ++ (show player) ++ ": ")
+
+  setSGR [Reset]
+
+printPlayerWon :: Int -> IO ()
+printPlayerWon player = do
+  when (player == playerOne) $ setSGR [SetColor Foreground Vivid Red]
+  when (player == playerTwo) $ setSGR [SetColor Foreground Vivid Blue]
+
+  putStr ("\nJogador " ++ (show player))
+
+  setSGR [Reset]
+
+  putStr " ganhou!\n\n"
+
+getColumn :: String -> [(String, Int)] -> Int
+getColumn letter [] = -1
+getColumn letter (element:table)
+  | letter == fst element = snd element
+  | otherwise = getColumn letter table
+
+playRound :: ControlBoard -> Int -> String -> ControlBoard
+playRound controlBoard player columnKey = play player (getColumn columnKey columnsMap) controlBoard
 
 main = do
-    -- setCursorPosition 5 0
-    -- setTitle "ANSI Terminal Short Example"
+  printHeader
+  printBoard controlBoard inverseRowsArray columnsArray
+  gameLoop controlBoard
 
-    setSGR [ SetConsoleIntensity BoldIntensity
-           , SetColor Foreground Vivid Red
-           ]
-    putStr "Hello "
+gameLoop :: ControlBoard -> IO ()
+gameLoop board = do
+  -- Player 1
+  printPlayer playerOne
+  columnKey <- getLine
 
-    setSGR [ SetConsoleIntensity NormalIntensity
-           , SetColor Foreground Vivid White
-           , SetColor Background Dull Blue
-           ]
-    putStr "World!"
-    setSGR [Reset]
-    putStr "\n"
+  let boardOne = playRound board playerOne columnKey
+
+  printHeader
+  printBoard boardOne inverseRowsArray columnsArray
+  
+  -- Verify if Player 1 won
+  if (didPlayerWon playerOne boardOne) then do printPlayerWon playerOne
+  else do
+    -- Player 2 
+    printPlayer playerTwo
+    columnKey <- getLine
+
+    let boardTwo = playRound boardOne playerTwo columnKey
+
+    printHeader
+    printBoard boardTwo inverseRowsArray columnsArray
+
+    if (didPlayerWon playerTwo boardTwo) then do printPlayerWon playerTwo
+    else do
+      -- Verify if the game was a draw
+      if (isDraw boardTwo) then do putStr "Empate!\n\n"
+      -- Else loops the game again
+      else do gameLoop boardTwo
