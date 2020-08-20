@@ -86,32 +86,45 @@ winMoves = [[(0, 0), (0, 1),  (0, 2),  (0, 3)],  -- Horizontal
             [(0, 0), (-1, 1), (-2, 2), (-3, 3)]] -- Diagonal
 
 -- Verify a wining move for a position
-verifyMove :: Int -> Int -> Int -> ControlBoard -> [(Int, Int)] -> Bool
-verifyMove row column player board [] = True  -- If all move positions == player, player won
+verifyMove :: Int -> Int -> Int -> ControlBoard -> [(Int, Int)] -> [(Int, Int)]
+verifyMove row column player board [] = []  -- If all move positions == player, player won
 verifyMove row column player board (move:moves)
-  | not (isValidPosition (row + (fst move)) (column + (snd move))) = False
-  | getPosition (row + (fst move)) (column + (snd move)) board == player = verifyMove row column player board moves
-  | otherwise = False
+  | not (isValidPosition xPosition yPosition) = []
+  | getPosition xPosition yPosition board == player = (xPosition, yPosition) : verifyMove row column player board moves
+  | otherwise = []
+  where
+    xPosition = row + (fst move)
+    yPosition = column + (snd move)
 
 -- Verify every wining move for a position
-verifyPosition :: Int -> Int -> Int -> ControlBoard -> [[(Int, Int)]] -> Bool
-verifyPosition row column player board [] = False  -- If all moves == False, player did not win
+verifyPosition :: Int -> Int -> Int -> ControlBoard -> [[(Int, Int)]] -> [(Int, Int)]
+verifyPosition row column player board [] = []  -- If all moves == False, player did not win
 verifyPosition row column player board (move:moves)
-  | player /= getPosition row column board = False  -- Verify if player is in the position
-  | verifyMove row column player board move = True
+  | player /= getPosition row column board = []  -- Verify if player is in the position
+  | (length movesArray) == 4 = movesArray
   | otherwise = verifyPosition row column player board moves
+  where
+    movesArray :: [(Int, Int)]
+    movesArray = verifyMove row column player board move
+
+-- Get wining positions
+getWinPositions :: Int -> ControlBoard -> [Int] -> [Int] -> [(Int, Int)]  -- Iterate through the board
+getWinPositions player board [] columns = []  
+getWinPositions player board (row:rows) [] = getWinPositions player board rows columnsArray  
+getWinPositions player board (row:rows) (column:columns)  
+  | (length movesArray) == 4 = movesArray -- If verifyPosition returns a 4 element array, player won
+  | otherwise = getWinPositions player board (row:rows) columns
+  where
+    movesArray :: [(Int, Int)]
+    movesArray = verifyPosition row column player board winMoves
 
 -- Loop through the board and verify every position
 didPlayerWon :: Int -> ControlBoard -> Bool
-didPlayerWon player board = didPlayerWonRecur player board rowsArray columnsArray
+didPlayerWon player board = (length winPositions == 4)
   where
-      didPlayerWonRecur :: Int -> ControlBoard -> [Int] -> [Int] -> Bool  -- Iterate through the board
-      didPlayerWonRecur player board [] columns = False  
-      didPlayerWonRecur player board (row:rows) [] = didPlayerWonRecur player board rows columnsArray  
-      didPlayerWonRecur player board (row:rows) (column:columns)  
-        | verifyPosition row column player board winMoves = True
-        | otherwise = didPlayerWonRecur player board (row:rows) columns
-
+    winPositions :: [(Int, Int)]
+    winPositions = getWinPositions player board rowsArray columnsArray
+        
 -- If every position is filled and none of the players won, the game is a draw
 isDraw :: ControlBoard -> Bool
 isDraw [] = True
@@ -122,10 +135,6 @@ isDraw (row:rows) = isDrawRecur row && isDraw rows
       isDrawRecur (column:columns)
         | column == 0 = False
         | otherwise = True && isDrawRecur columns
-
--- Get wining positions
-getWinPositions :: ControlBoard -> [(Int, Int)]
-getWinPositions board = []
 
 -- Functions to manage IO operations
 resetScreen :: IO ()
@@ -216,7 +225,7 @@ gameLoop board player = do
     let newBoard = play player column board    
     -- Verify if player won
     if (didPlayerWon player newBoard) then do 
-      let winPositions = getWinPositions newBoard
+      let winPositions = getWinPositions player newBoard rowsArray columnsArray
 
       printInstructionMessage
 
