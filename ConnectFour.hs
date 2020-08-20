@@ -26,9 +26,8 @@ controlBoard = [[0, 0, 0, 0, 0, 0, 0],
                 [0, 0, 0, 0, 0, 0, 0]]
 
 columnsMap :: [(String, Int)]
-columnsMap = [("a", 0), ("b", 1), ("c", 2), 
-              ("d", 3), ("e", 4), ("f", 5),
-              ("g", 6)]
+columnsMap = [("a", 0), ("b", 1), ("c", 2),("d", 3), 
+              ("e", 4), ("f", 5),("g", 6)]
 
 rowsArray :: [Int]
 rowsArray = [0, 1, 2, 3, 4, 5]
@@ -81,11 +80,12 @@ play player column board
 
 -- Functions to verify if the player won
 winMoves :: [[(Int, Int)]]
-winMoves = [[(0, 0), (0, 1),  (0, 2),  (0, 3)],
-            [(0, 0), (1, 0),  (2, 0),  (3, 0)],
-            [(0, 0), (1, 1),  (2, 2),  (3, 3)],
-            [(0, 0), (-1, 1), (-2, 2), (-3, 3)]]
+winMoves = [[(0, 0), (0, 1),  (0, 2),  (0, 3)],  -- Horizontal
+            [(0, 0), (1, 0),  (2, 0),  (3, 0)],  -- Vertical
+            [(0, 0), (1, 1),  (2, 2),  (3, 3)],  -- Diagonal
+            [(0, 0), (-1, 1), (-2, 2), (-3, 3)]] -- Diagonal
 
+-- Verify a wining move for a position
 verifyMove :: Int -> Int -> Int -> ControlBoard -> [(Int, Int)] -> Bool
 verifyMove row column player board [] = True  -- If all move positions == player, player won
 verifyMove row column player board (move:moves)
@@ -93,6 +93,7 @@ verifyMove row column player board (move:moves)
   | getPosition (row + (fst move)) (column + (snd move)) board == player = verifyMove row column player board moves
   | otherwise = False
 
+-- Verify every wining move for a position
 verifyPosition :: Int -> Int -> Int -> ControlBoard -> [[(Int, Int)]] -> Bool
 verifyPosition row column player board [] = False  -- If all moves == False, player did not win
 verifyPosition row column player board (move:moves)
@@ -100,6 +101,7 @@ verifyPosition row column player board (move:moves)
   | verifyMove row column player board move = True
   | otherwise = verifyPosition row column player board moves
 
+-- Loop through the board and verify every position
 didPlayerWon :: Int -> ControlBoard -> Bool
 didPlayerWon player board = didPlayerWonRecur player board rowsArray columnsArray
   where
@@ -110,6 +112,7 @@ didPlayerWon player board = didPlayerWonRecur player board rowsArray columnsArra
         | verifyPosition row column player board winMoves = True
         | otherwise = didPlayerWonRecur player board (row:rows) columns
 
+-- If every position is filled and none of the players won, the game is a draw
 isDraw :: ControlBoard -> Bool
 isDraw [] = True
 isDraw (row:rows) = isDrawRecur row && isDraw rows
@@ -120,32 +123,56 @@ isDraw (row:rows) = isDrawRecur row && isDraw rows
         | column == 0 = False
         | otherwise = True && isDrawRecur columns
 
--- Print board
-printBoard :: ControlBoard -> [Int] -> [Int] -> IO ()
-printBoard board [] columns = putStr ""  
-printBoard board (row:rows) [] = do 
-  putStr "\n"  
-  printBoard board rows columnsArray
-printBoard board (row:rows) (column:columns) = do
+-- Get wining positions
+getWinPositions :: ControlBoard -> [(Int, Int)]
+getWinPositions board = []
+
+-- Functions to manage IO operations
+resetScreen :: IO ()
+resetScreen = setSGR [Reset] >> clearScreen >> setCursorPosition 0 0
+
+printInstructionMessage :: IO ()
+printInstructionMessage = do
+  resetScreen
+  setSGR [SetConsoleIntensity BoldIntensity]
+  putStr "\n Bem vindo ao jogo Connect Four!\n Digite um caractere de 'a' à 'g':\n"
+  setSGR [Reset]
+
+isWinPosition :: Int -> Int -> [(Int, Int)] -> Bool
+isWinPosition row column [] = False
+isWinPosition row column (winPosition:winPositions)
+    | row == (fst winPosition) && column == (snd winPosition) = True
+    | otherwise = isWinPosition row column winPositions
+
+printBoard :: ControlBoard -> [Int] -> [Int] -> [(Int, Int)] -> IO ()
+printBoard board [] columns winPositions = putStr ""  
+printBoard board (row:rows) [] winPositions = do 
+  putStr "\n  "  
+  printBoard board rows columnsArray winPositions
+printBoard board (row:rows) (column:columns) winPositions = do
   let position = getPosition row column board
 
+  -- Player 1 is color red
   when (position == playerOne) $ setSGR [SetColor Foreground Vivid Red]
+  -- Player 2 is color blue
   when (position == playerTwo) $ setSGR [SetColor Foreground Vivid Blue]
+  -- Set win positions bold
+  when (isWinPosition row column winPositions) $  setSGR [SetConsoleIntensity BoldIntensity]
 
   putStr ("O ")
   setSGR [Reset]
 
-  printBoard board (row:rows) columns
+  printBoard board (row:rows) columns winPositions
 
 printHeader :: IO ()
 printHeader = do
   setSGR [SetConsoleIntensity BoldIntensity]
-  putStr "\na b c d e f g\n"
+  putStr "\n  a b c d e f g\n  "
   setSGR [Reset]
 
 printPlayer :: Int -> IO ()
 printPlayer player = do
-  putStr "\nVez do "
+  putStr "\n Vez do "
 
   when (player == playerOne) $ setSGR [SetColor Foreground Vivid Red]
   when (player == playerTwo) $ setSGR [SetColor Foreground Vivid Blue]
@@ -159,7 +186,7 @@ printPlayerWon player = do
   when (player == playerOne) $ setSGR [SetColor Foreground Vivid Red]
   when (player == playerTwo) $ setSGR [SetColor Foreground Vivid Blue]
 
-  putStr ("\nJogador " ++ (show player))
+  putStr ("\n Jogador " ++ (show player))
 
   setSGR [Reset]
 
@@ -171,40 +198,41 @@ getColumn letter (element:table)
   | letter == fst element = snd element
   | otherwise = getColumn letter table
 
-playRound :: ControlBoard -> Int -> String -> ControlBoard
-playRound controlBoard player columnKey = play player (getColumn columnKey columnsMap) controlBoard
-
 main = do
+  printInstructionMessage
   printHeader
-  printBoard controlBoard inverseRowsArray columnsArray
-  gameLoop controlBoard
+  printBoard controlBoard inverseRowsArray columnsArray []
+  gameLoop controlBoard playerOne
 
-gameLoop :: ControlBoard -> IO ()
-gameLoop board = do
-  -- Player 1
-  printPlayer playerOne
+gameLoop :: ControlBoard -> Int -> IO ()
+gameLoop board player = do
+  printPlayer player
   columnKey <- getLine
 
-  let boardOne = playRound board playerOne columnKey
+  let column = getColumn columnKey columnsMap
 
-  printHeader
-  printBoard boardOne inverseRowsArray columnsArray
-  
-  -- Verify if Player 1 won
-  if (didPlayerWon playerOne boardOne) then do printPlayerWon playerOne
+  if (column == -1) then do gameLoop board player -- Validate input
   else do
-    -- Player 2 
-    printPlayer playerTwo
-    columnKey <- getLine
+    let newBoard = play player column board    
+    -- Verify if player won
+    if (didPlayerWon player newBoard) then do 
+      let winPositions = getWinPositions newBoard
 
-    let boardTwo = playRound boardOne playerTwo columnKey
+      printInstructionMessage
 
-    printHeader
-    printBoard boardTwo inverseRowsArray columnsArray
-
-    if (didPlayerWon playerTwo boardTwo) then do printPlayerWon playerTwo
+      printHeader
+      printBoard newBoard inverseRowsArray columnsArray winPositions
+    
+      printPlayerWon player
     else do
       -- Verify if the game was a draw
-      if (isDraw boardTwo) then do putStr "Empate!\n\n"
-      -- Else loops the game again
-      else do gameLoop boardTwo
+      if (isDraw newBoard) then do putStr " Empate!\n\n"
+      else do
+        printInstructionMessage
+
+        printHeader
+        printBoard newBoard inverseRowsArray columnsArray []
+
+        -- Next round
+        when (player == playerOne) $ gameLoop newBoard playerTwo
+        when (player == playerTwo) $ gameLoop newBoard playerOne
