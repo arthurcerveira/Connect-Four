@@ -2,7 +2,6 @@ module Main where
 
 import System.IO 
 import Control.Monad  -- To use 'when'
--- cabal install ansi-terminal
 import System.Console.ANSI  -- Add color to output
 
 -- Control board
@@ -201,11 +200,16 @@ printPlayerWon player = do
 
   putStr " ganhou!\n\n"
 
-getColumn :: String -> [(String, Int)] -> Int
-getColumn letter [] = -1
-getColumn letter (element:table)
-  | letter == fst element = snd element
-  | otherwise = getColumn letter table
+getColumn :: String -> [(String, Int)] -> ControlBoard -> Int
+getColumn letter [] board = -1
+getColumn letter (element:table) board
+  | letter == fst element = isValidColumn (snd element) board
+  | otherwise = getColumn letter table board
+  where 
+    isValidColumn :: Int -> ControlBoard -> Int
+    isValidColumn column board 
+      | isValidMove column board = column
+      | otherwise = -1
 
 main = do
   printInstructionMessage
@@ -218,7 +222,7 @@ gameLoop board player = do
   printPlayer player
   columnKey <- getLine
 
-  let column = getColumn columnKey columnsMap
+  let column = getColumn columnKey columnsMap board
 
   if (column == -1) then do gameLoop board player -- Validate input
   else do
@@ -234,14 +238,14 @@ gameLoop board player = do
     
       printPlayerWon player
     else do
+      printInstructionMessage
+
+      printHeader
+      printBoard newBoard inverseRowsArray columnsArray []
+
       -- Verify if the game was a draw
-      if (isDraw newBoard) then do putStr " Empate!\n\n"
+      if (isDraw newBoard) then do putStr "\n Empate!\n\n"
       else do
-        printInstructionMessage
-
-        printHeader
-        printBoard newBoard inverseRowsArray columnsArray []
-
         -- Next round
         when (player == playerOne) $ gameLoop newBoard playerTwo
         when (player == playerTwo) $ gameLoop newBoard playerOne
